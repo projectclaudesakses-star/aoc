@@ -47,7 +47,7 @@ mengirim hasil scan langsung ke Google Sheets.
 Paling mudah pakai GitHub Pages:
 
 1. Push repo ini ke GitHub (branch `scanner-absensi` sudah ada).
-2. Di repo settings → Pages → Source: branch `scanner-absensi`, folder `/web`.
+2. Di repo settings → Pages → Source: branch `scanner-absensi`, folder `/docs`.
 3. Setelah beberapa menit URL muncul, misal:
    `https://<user>.github.io/aoc/`
 
