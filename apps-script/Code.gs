@@ -19,9 +19,25 @@ const SHEET_NAME = 'EL1';
 const HEADERS = ['Timestamp', 'Barcode ID', 'Tanggal', 'Jam', 'Device'];
 
 function doGet(e) {
-  return ContentService
-    .createTextOutput(JSON.stringify({ ok: true, service: 'absensi-scanner' }))
-    .setMimeType(ContentService.MimeType.JSON);
+  // Buka URL "?debug=1" di browser untuk memastikan script menulis
+  // ke spreadsheet & tab yang benar.
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    return jsonOut({
+      ok: true,
+      service: 'absensi-scanner',
+      spreadsheet_id: SHEET_ID,
+      spreadsheet_name: ss.getName(),
+      spreadsheet_url: ss.getUrl(),
+      sheet_name: SHEET_NAME,
+      sheet_found: sheet !== null,
+      all_sheet_names: ss.getSheets().map(function (s) { return s.getName(); }),
+      last_row: sheet ? sheet.getLastRow() : null,
+    });
+  } catch (err) {
+    return jsonOut({ ok: false, error: String(err) });
+  }
 }
 
 function doPost(e) {
