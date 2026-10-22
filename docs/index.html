@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Scanner Absensi</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --err: #ef4444;
+      --accent: #38bdf8;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+    }
+    header {
+      padding: 16px;
+      text-align: center;
+      border-bottom: 1px solid #334155;
+    }
+    header h1 {
+      margin: 0; font-size: 18px; font-weight: 600;
+    }
+    header p {
+      margin: 4px 0 0; font-size: 12px; color: var(--muted);
+    }
+    main {
+      padding: 16px;
+      display: flex; flex-direction: column; gap: 16px;
+      max-width: 480px; margin: 0 auto;
+    }
+    #reader {
+      width: 100%;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      aspect-ratio: 1 / 1;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .status {
+      font-size: 15px;
+      line-height: 1.4;
+    }
+    .status.ok    { color: var(--ok); }
+    .status.warn  { color: var(--warn); }
+    .status.err   { color: var(--err); }
+    .status.idle  { color: var(--muted); }
+    .barcode {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 20px;
+      font-weight: 700;
+      margin-top: 4px;
+      word-break: break-all;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #0f172a;
+      border: 0;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid #475569;
+      font-weight: 500;
+    }
+    .row {
+      display: flex; gap: 8px;
+    }
+    .log {
+      max-height: 180px;
+      overflow-y: auto;
+      font-size: 13px;
+    }
+    .log-item {
+      padding: 6px 0;
+      border-bottom: 1px dashed #334155;
+      display: flex; justify-content: space-between;
+      gap: 8px;
+    }
+    .log-item:last-child { border-bottom: 0; }
+    .log-item .t { color: var(--muted); font-size: 11px; white-space: nowrap; }
+    .cfg {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .cfg input {
+      width: 100%;
+      margin-top: 6px;
+      padding: 10px;
+      background: #0f172a;
+      color: var(--text);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Scanner Absensi</h1>
+    <p>Arahkan kamera ke barcode di ID card</p>
+  </header>
+
+  <main>
+    <div id="reader"></div>
+
+    <div class="card">
+      <div id="status" class="status idle">Menunggu scan…</div>
+      <div id="lastBarcode" class="barcode"></div>
+    </div>
+
+    <div class="row">
+      <button id="startBtn">Mulai Scan</button>
+      <button id="stopBtn" class="secondary" style="display:none">Berhenti</button>
+    </div>
+
+    <div class="card">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Riwayat scan (sesi ini)</div>
+      <div id="log" class="log"></div>
+    </div>
+
+    <div class="card cfg">
+      <label>URL Apps Script Web App:
+        <input id="endpoint" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+      </label>
+      <div style="margin-top:8px;font-size:11px">
+        Isi sekali, URL disimpan di HP ini.
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Ganti nilai di sini setelah deploy Apps Script, atau isi lewat kotak di bawah.
+    const DEFAULT_ENDPOINT = '';
+
+    const statusEl = document.getElementById('status');
+    const lastEl = document.getElementById('lastBarcode');
+    const logEl = document.getElementById('log');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const endpointInput = document.getElementById('endpoint');
+
+    endpointInput.value = localStorage.getItem('endpoint') || DEFAULT_ENDPOINT;
+    endpointInput.addEventListener('change', () => {
+      localStorage.setItem('endpoint', endpointInput.value.trim());
+    });
+
+    const html5QrCode = new Html5Qrcode('reader');
+    let scanning = false;
+    let lastSent = { code: '', at: 0 };
+
+    function setStatus(text, cls) {
+      statusEl.textContent = text;
+      statusEl.className = 'status ' + (cls || 'idle');
+    }
+
+    function addLog(code, result) {
+      const row = document.createElement('div');
+      row.className = 'log-item';
+      const left = document.createElement('div');
+      left.innerHTML = '<strong>' + code + '</strong><br/><span style="color:var(--muted);font-size:11px">' + result + '</span>';
+      const right = document.createElement('div');
+      right.className = 't';
+      right.textContent = new Date().toLocaleTimeString('id-ID');
+      row.appendChild(left);
+      row.appendChild(right);
+      logEl.prepend(row);
+    }
+
+    async function sendToSheet(code) {
+      const url = (endpointInput.value || '').trim();
+      if (!url) {
+        setStatus('Isi dulu URL Apps Script di bawah.', 'err');
+        return;
+      }
+      setStatus('Mengirim ke spreadsheet…', 'idle');
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          // text/plain menghindari CORS preflight ke Apps Script
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            barcode: code,
+            tempat: localStorage.getItem('tempat') || '',
+          }),
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          setStatus('Gagal: ' + (data.error || 'unknown'), 'err');
+          addLog(code, 'GAGAL — ' + (data.error || ''));
+          return;
+        }
+        if (data.duplicate) {
+          setStatus('Sudah tercatat hari ini (' + data.message + ')', 'warn');
+          addLog(code, 'DUPLIKAT');
+          beep(220, 120);
+        } else {
+          setStatus('Tercatat ✓ ' + data.jam, 'ok');
+          addLog(code, 'OK ' + data.jam);
+          beep(880, 120);
+        }
+      } catch (err) {
+        setStatus('Error jaringan: ' + err, 'err');
+        addLog(code, 'ERROR');
+      }
+    }
+
+    function beep(freq, dur) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = freq;
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start();
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur / 1000);
+        osc.stop(ctx.currentTime + dur / 1000);
+      } catch (e) {}
+    }
+
+    function onScanSuccess(decodedText) {
+      const now = Date.now();
+      // debounce: barcode sama dalam 3 detik diabaikan agar tidak double-kirim
+      if (decodedText === lastSent.code && now - lastSent.at < 3000) return;
+      lastSent = { code: decodedText, at: now };
+      lastEl.textContent = decodedText;
+      if (navigator.vibrate) navigator.vibrate(80);
+      sendToSheet(decodedText);
+    }
+
+    async function startScan() {
+      try {
+        await html5QrCode.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: { width: 260, height: 180 },
+            aspectRatio: 1.0,
+          },
+          onScanSuccess,
+          () => { /* ignore per-frame fail */ }
+        );
+        scanning = true;
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'block';
+        setStatus('Siap. Arahkan ke barcode…', 'idle');
+      } catch (err) {
+        setStatus('Tidak bisa akses kamera: ' + err, 'err');
+      }
+    }
+
+    async function stopScan() {
+      if (!scanning) return;
+      await html5QrCode.stop();
+      scanning = false;
+      startBtn.style.display = 'block';
+      stopBtn.style.display = 'none';
+      setStatus('Scanner berhenti.', 'idle');
+    }
+
+    startBtn.addEventListener('click', startScan);
+    stopBtn.addEventListener('click', stopScan);
+  </script>
+</body>
+</html>
