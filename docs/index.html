@@ -214,12 +214,13 @@
           return;
         }
         if (data.duplicate) {
-          setStatus('Sudah tercatat hari ini (' + data.message + ')', 'warn');
-          addLog(code, 'DUPLIKAT');
+          setStatus(data.message || 'Sudah mencapai batas scan hari ini', 'warn');
+          addLog(code, 'LIMIT ' + (data.count || '') + '/' + (data.limit || ''));
           beep(220, 120);
         } else {
-          setStatus('Tercatat ✓ ' + data.jam, 'ok');
-          addLog(code, 'OK ' + data.jam);
+          const tally = data.count && data.limit ? ' (' + data.count + '/' + data.limit + ')' : '';
+          setStatus('Tercatat ✓ ' + data.jam + tally, 'ok');
+          addLog(code, 'OK ' + data.jam + tally);
           beep(880, 120);
         }
       } catch (err) {

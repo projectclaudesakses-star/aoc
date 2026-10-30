@@ -27,6 +27,18 @@ const COL_TEMPAT = 6;      // F
 const DATA_HEADER_ROW = 1; // header di baris 1
 const TIMEZONE = 'Asia/Jakarta'; // GMT+7 — abaikan timezone spreadsheet
 
+// Batas maksimum berapa kali satu barcode boleh di-scan di tanggal tertentu.
+// Default 2x; override untuk tanggal khusus di bawah.
+const DEFAULT_DAILY_LIMIT = 2;
+const DAILY_LIMIT_OVERRIDES = {
+  '2026-11-19': 3,
+  '2026-11-20': 6,
+};
+
+function getDailyLimit(tanggal) {
+  return DAILY_LIMIT_OVERRIDES[tanggal] || DEFAULT_DAILY_LIMIT;
+}
+
 function doGet(e) {
   // Buka URL "?debug=1" di browser untuk memastikan script menulis
   // ke spreadsheet & tab yang benar.
@@ -81,23 +93,35 @@ function doPost(e) {
     const lastRowD = findLastRowInColumn(sheet, COL_SCANNED);
     const targetRow = Math.max(DATA_HEADER_ROW + 1, lastRowD + 1);
 
-    // Cek duplikat per hari — bandingkan kolom D (SCANNED DETAILS)
-    // dan kolom A (TIMESTAMP) tanggalnya.
+    // Hitung berapa kali barcode ini sudah muncul di tanggal yang sama.
+    // Baca kolom A (TIMESTAMP), B (DATE), D (SCANNED DETAILS) sekaligus.
+    const limit = getDailyLimit(tanggal);
+    let countToday = 0;
     if (lastRowD >= DATA_HEADER_ROW + 1) {
-      const existing = sheet.getRange(DATA_HEADER_ROW + 1, 1, lastRowD - DATA_HEADER_ROW, COL_SCANNED).getValues();
-      for (let i = 0; i < existing.length; i++) {
-        const existingTs = existing[i][COL_TIMESTAMP - 1];
-        const existingId = String(existing[i][COL_SCANNED - 1]).trim();
-        if (existingId === barcode && isSameDay(existingTs, now, tz)) {
-          return jsonOut({
-            ok: true,
-            duplicate: true,
-            message: 'Sudah tercatat hari ini',
-            barcode: barcode,
-            row: DATA_HEADER_ROW + 1 + i,
-          });
-        }
+      const range = sheet.getRange(DATA_HEADER_ROW + 1, 1, lastRowD - DATA_HEADER_ROW, COL_SCANNED).getValues();
+      for (let i = 0; i < range.length; i++) {
+        const existingId = String(range[i][COL_SCANNED - 1]).trim();
+        if (existingId !== barcode) continue;
+        // Cocokkan tanggal: pakai kolom B (DATE) kalau ada, kalau kosong
+        // fallback ke kolom A (TIMESTAMP).
+        const existingDate = String(range[i][COL_DATE - 1]).trim();
+        const existingTs = range[i][COL_TIMESTAMP - 1];
+        const sameDay = existingDate
+          ? (existingDate.indexOf(tanggal) === 0)
+          : isSameDay(existingTs, now, tz);
+        if (sameDay) countToday++;
       }
+    }
+
+    if (countToday >= limit) {
+      return jsonOut({
+        ok: true,
+        duplicate: true,
+        message: 'Sudah mencapai batas scan hari ini (' + countToday + '/' + limit + ')',
+        barcode: barcode,
+        count: countToday,
+        limit: limit,
+      });
     }
 
     sheet.getRange(targetRow, COL_TIMESTAMP).setValue(timestampStr);
@@ -115,6 +139,8 @@ function doPost(e) {
       tanggal: tanggal,
       jam: jam,
       row: targetRow,
+      count: countToday + 1,
+      limit: limit,
     });
   } catch (err) {
     return jsonOut({ ok: false, error: String(err) });
