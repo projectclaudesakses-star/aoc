@@ -13,19 +13,19 @@
  */
 
 const SHEET_ID = '1S3nAnX5ije6prGTwnJ7sZsdYmQtu7q8g';
-const SHEET_NAME = 'EL1';
+const SHEET_NAME = 'HP';
 
-// Struktur kolom di EL1:
-// A=TIMESTAMP  B=CHECK IN  C-G=NAME/COUNTRY/COMPANY/CATEGORY/BUS CODE (biarkan apa adanya — biasanya formula lookup)
-// H=STATUS  I=AGENDA  J=CHECKIN  K=TEMPAT CHECKIN
+// Struktur kolom di sheet HP:
+// A=TIMESTAMP  B=DATE  C=TIME  D=SCANNED DETAILS  E=AGENDA  F=TEMPAT CHECKIN
 const COL_TIMESTAMP = 1;   // A
-const COL_CHECKIN_ID = 2;  // B
-const COL_STATUS = 8;      // H
-const COL_AGENDA = 9;      // I
-const COL_CHECKIN_TS = 10; // J
-const COL_TEMPAT = 11;     // K
+const COL_DATE = 2;        // B
+const COL_TIME = 3;        // C
+const COL_SCANNED = 4;     // D
+const COL_AGENDA = 5;      // E
+const COL_TEMPAT = 6;      // F
 
 const DATA_HEADER_ROW = 1; // header di baris 1
+const DEFAULT_AGENDA = 'EL';
 
 function doGet(e) {
   // Buka URL "?debug=1" di browser untuk memastikan script menulis
@@ -72,18 +72,19 @@ function doPost(e) {
     const tanggal = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
     const jam = Utilities.formatDate(now, tz, 'HH:mm:ss');
 
-    // Cari baris kosong berdasarkan KOLOM B (CHECK IN) saja —
-    // bukan getLastRow() seluruh sheet, karena sheet ini punya
+    // Cari baris kosong berdasarkan KOLOM D (SCANNED DETAILS) saja —
+    // bukan getLastRow() seluruh sheet, karena sheet mungkin punya
     // formula/konten di kolom lain yang terbentang jauh ke bawah.
-    const lastRowB = findLastRowInColumn(sheet, COL_CHECKIN_ID);
-    const targetRow = Math.max(DATA_HEADER_ROW + 1, lastRowB + 1);
+    const lastRowD = findLastRowInColumn(sheet, COL_SCANNED);
+    const targetRow = Math.max(DATA_HEADER_ROW + 1, lastRowD + 1);
 
-    // Cek duplikat per hari — scan kolom B+A dari header sampai lastRowB.
-    if (lastRowB >= DATA_HEADER_ROW + 1) {
-      const existing = sheet.getRange(DATA_HEADER_ROW + 1, 1, lastRowB - DATA_HEADER_ROW, 2).getValues();
+    // Cek duplikat per hari — bandingkan kolom D (SCANNED DETAILS)
+    // dan kolom A (TIMESTAMP) tanggalnya.
+    if (lastRowD >= DATA_HEADER_ROW + 1) {
+      const existing = sheet.getRange(DATA_HEADER_ROW + 1, 1, lastRowD - DATA_HEADER_ROW, COL_SCANNED).getValues();
       for (let i = 0; i < existing.length; i++) {
-        const existingTs = existing[i][0];
-        const existingId = String(existing[i][1]).trim();
+        const existingTs = existing[i][COL_TIMESTAMP - 1];
+        const existingId = String(existing[i][COL_SCANNED - 1]).trim();
         if (existingId === barcode && isSameDay(existingTs, now, tz)) {
           return jsonOut({
             ok: true,
@@ -96,13 +97,11 @@ function doPost(e) {
       }
     }
 
-    // Tulis per sel supaya tidak menimpa kolom C-G yang biasanya berisi
-    // formula lookup (NAME, COUNTRY, COMPANY, CATEGORY, BUS CODE).
     sheet.getRange(targetRow, COL_TIMESTAMP).setValue(now);
-    sheet.getRange(targetRow, COL_CHECKIN_ID).setValue(barcode);
-    sheet.getRange(targetRow, COL_STATUS).setValue('HADIR');
-    sheet.getRange(targetRow, COL_AGENDA).setValue('EL');
-    sheet.getRange(targetRow, COL_CHECKIN_TS).setValue(now);
+    sheet.getRange(targetRow, COL_DATE).setValue(tanggal);
+    sheet.getRange(targetRow, COL_TIME).setValue(jam);
+    sheet.getRange(targetRow, COL_SCANNED).setValue(barcode);
+    sheet.getRange(targetRow, COL_AGENDA).setValue(DEFAULT_AGENDA);
     if (tempat) sheet.getRange(targetRow, COL_TEMPAT).setValue(tempat);
     SpreadsheetApp.flush();
 
