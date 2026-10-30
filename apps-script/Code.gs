@@ -25,7 +25,7 @@ const COL_AGENDA = 5;      // E
 const COL_TEMPAT = 6;      // F
 
 const DATA_HEADER_ROW = 1; // header di baris 1
-const DEFAULT_AGENDA = 'EL';
+const TIMEZONE = 'Asia/Jakarta'; // GMT+7 — abaikan timezone spreadsheet
 
 function doGet(e) {
   // Buka URL "?debug=1" di browser untuk memastikan script menulis
@@ -68,9 +68,12 @@ function doPost(e) {
     }
 
     const now = new Date();
-    const tz = ss.getSpreadsheetTimeZone() || 'Asia/Jakarta';
+    const tz = TIMEZONE;
     const tanggal = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
     const jam = Utilities.formatDate(now, tz, 'HH:mm:ss');
+    // Timestamp string dengan offset WIB — tulis sebagai string supaya
+    // Google Sheets tidak mengkonversi ulang dengan timezone-nya sendiri.
+    const timestampStr = Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss');
 
     // Cari baris kosong berdasarkan KOLOM D (SCANNED DETAILS) saja —
     // bukan getLastRow() seluruh sheet, karena sheet mungkin punya
@@ -97,11 +100,11 @@ function doPost(e) {
       }
     }
 
-    sheet.getRange(targetRow, COL_TIMESTAMP).setValue(now);
+    sheet.getRange(targetRow, COL_TIMESTAMP).setValue(timestampStr);
     sheet.getRange(targetRow, COL_DATE).setValue(tanggal);
     sheet.getRange(targetRow, COL_TIME).setValue(jam);
     sheet.getRange(targetRow, COL_SCANNED).setValue(barcode);
-    sheet.getRange(targetRow, COL_AGENDA).setValue(DEFAULT_AGENDA);
+    // Kolom E (AGENDA) sengaja tidak diisi.
     if (tempat) sheet.getRange(targetRow, COL_TEMPAT).setValue(tempat);
     SpreadsheetApp.flush();
 
@@ -136,10 +139,14 @@ function findLastRowInColumn(sheet, colIdx) {
 }
 
 function isSameDay(a, b, tz) {
-  if (!(a instanceof Date)) return false;
-  const fa = Utilities.formatDate(a, tz, 'yyyy-MM-dd');
+  if (!a) return false;
   const fb = Utilities.formatDate(b, tz, 'yyyy-MM-dd');
-  return fa === fb;
+  if (a instanceof Date) {
+    return Utilities.formatDate(a, tz, 'yyyy-MM-dd') === fb;
+  }
+  // String seperti "2026-10-30 23:00:00" atau "2026-10-30"
+  const s = String(a).trim();
+  return s.indexOf(fb) === 0;
 }
 
 function jsonOut(obj) {
