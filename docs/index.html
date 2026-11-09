@@ -31,16 +31,12 @@
       text-align: center;
       border-bottom: 1px solid #334155;
     }
-    header h1 {
-      margin: 0; font-size: 18px; font-weight: 600;
-    }
-    header p {
-      margin: 4px 0 0; font-size: 12px; color: var(--muted);
-    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    header p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
     main {
       padding: 16px;
       display: flex; flex-direction: column; gap: 16px;
-      max-width: 480px; margin: 0 auto;
+      max-width: 520px; margin: 0 auto;
     }
     #reader {
       width: 100%;
@@ -48,74 +44,81 @@
       border-radius: 12px;
       overflow: hidden;
       aspect-ratio: 1 / 1;
+      position: relative;
     }
-    .card {
-      background: var(--card);
-      border-radius: 12px;
-      padding: 16px;
+    /* Paksa video mengisi kotak reader di semua browser */
+    #reader video {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
     }
-    .status {
-      font-size: 15px;
-      line-height: 1.4;
+    .cam-toolbar {
+      position: absolute;
+      top: 8px; right: 8px;
+      display: flex; gap: 6px;
+      z-index: 20;
     }
+    .cam-btn {
+      background: rgba(15, 23, 42, 0.75);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 999px;
+      width: 40px; height: 40px;
+      font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      padding: 0;
+    }
+    .cam-btn.active { background: var(--accent); color: #0f172a; border-color: var(--accent); }
+    .card { background: var(--card); border-radius: 12px; padding: 16px; }
+    .status { font-size: 15px; line-height: 1.4; }
     .status.ok    { color: var(--ok); }
     .status.warn  { color: var(--warn); }
     .status.err   { color: var(--err); }
     .status.idle  { color: var(--muted); }
     .barcode {
       font-family: ui-monospace, Menlo, monospace;
-      font-size: 20px;
-      font-weight: 700;
-      margin-top: 4px;
-      word-break: break-all;
+      font-size: 20px; font-weight: 700;
+      margin-top: 4px; word-break: break-all;
     }
-    button {
-      width: 100%;
-      padding: 14px;
-      background: var(--accent);
-      color: #0f172a;
-      border: 0;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
+    button.primary, button.secondary {
+      width: 100%; padding: 14px;
+      border: 0; border-radius: 10px;
+      font-size: 16px; font-weight: 700; cursor: pointer;
     }
+    button.primary { background: var(--accent); color: #0f172a; }
     button.secondary {
-      background: transparent;
-      color: var(--text);
-      border: 1px solid #475569;
-      font-weight: 500;
+      background: transparent; color: var(--text);
+      border: 1px solid #475569; font-weight: 500;
     }
-    .row {
-      display: flex; gap: 8px;
-    }
-    .log {
-      max-height: 180px;
-      overflow-y: auto;
-      font-size: 13px;
-    }
+    .row { display: flex; gap: 8px; }
+    .log { max-height: 180px; overflow-y: auto; font-size: 13px; }
     .log-item {
       padding: 6px 0;
       border-bottom: 1px dashed #334155;
-      display: flex; justify-content: space-between;
-      gap: 8px;
+      display: flex; justify-content: space-between; gap: 8px;
     }
     .log-item:last-child { border-bottom: 0; }
     .log-item .t { color: var(--muted); font-size: 11px; white-space: nowrap; }
-    .cfg {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .cfg input {
+    .cfg { font-size: 12px; color: var(--muted); }
+    .cfg label { display: block; margin-top: 10px; }
+    .cfg label:first-child { margin-top: 0; }
+    .cfg input, .cfg select {
       width: 100%;
       margin-top: 6px;
       padding: 10px;
-      background: #0f172a;
-      color: var(--text);
-      border: 1px solid #334155;
-      border-radius: 8px;
+      background: #0f172a; color: var(--text);
+      border: 1px solid #334155; border-radius: 8px;
       font-size: 12px;
     }
+    .zoom-wrap {
+      position: absolute;
+      bottom: 12px; left: 12px; right: 12px;
+      z-index: 20;
+      display: none;
+    }
+    .zoom-wrap.on { display: block; }
+    .zoom-wrap input[type=range] { width: 100%; }
   </style>
 </head>
 <body>
@@ -125,7 +128,14 @@
   </header>
 
   <main>
-    <div id="reader"></div>
+    <div id="reader">
+      <div class="cam-toolbar">
+        <button id="torchBtn" class="cam-btn" title="Senter" style="display:none">⚡</button>
+      </div>
+      <div id="zoomWrap" class="zoom-wrap">
+        <input id="zoomRange" type="range" min="1" max="5" step="0.1" value="1" />
+      </div>
+    </div>
 
     <div class="card">
       <div id="status" class="status idle">Menunggu scan…</div>
@@ -133,7 +143,7 @@
     </div>
 
     <div class="row">
-      <button id="startBtn">Mulai Scan</button>
+      <button id="startBtn" class="primary">Mulai Scan</button>
       <button id="stopBtn" class="secondary" style="display:none">Berhenti</button>
     </div>
 
@@ -146,31 +156,43 @@
       <label>URL Apps Script Web App:
         <input id="endpoint" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
       </label>
+      <label>Pilih kamera:
+        <select id="cameraSelect"><option value="">(deteksi otomatis — kamera belakang)</option></select>
+      </label>
+      <label>Tempat check-in (opsional):
+        <input id="tempat" type="text" placeholder="misal: Gate A" />
+      </label>
       <div style="margin-top:8px;font-size:11px">
-        Isi sekali, URL disimpan di HP ini.
+        Tips iPhone: pilih kamera yang namanya ada <em>"Back Camera"</em> (bukan Ultra Wide). Jika tetap susah fokus di jarak dekat, mundurkan HP 10–15 cm.
       </div>
     </div>
   </main>
 
   <script>
-    // Ganti nilai di sini setelah deploy Apps Script, atau isi lewat kotak di bawah.
-    const DEFAULT_ENDPOINT = '';
-
     const statusEl = document.getElementById('status');
     const lastEl = document.getElementById('lastBarcode');
     const logEl = document.getElementById('log');
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
     const endpointInput = document.getElementById('endpoint');
+    const tempatInput = document.getElementById('tempat');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const torchBtn = document.getElementById('torchBtn');
+    const zoomWrap = document.getElementById('zoomWrap');
+    const zoomRange = document.getElementById('zoomRange');
 
-    endpointInput.value = localStorage.getItem('endpoint') || DEFAULT_ENDPOINT;
-    endpointInput.addEventListener('change', () => {
-      localStorage.setItem('endpoint', endpointInput.value.trim());
-    });
+    // Muat ulang pilihan dari localStorage
+    endpointInput.value = localStorage.getItem('endpoint') || '';
+    tempatInput.value = localStorage.getItem('tempat') || '';
+    endpointInput.addEventListener('change', () => localStorage.setItem('endpoint', endpointInput.value.trim()));
+    tempatInput.addEventListener('change', () => localStorage.setItem('tempat', tempatInput.value.trim()));
+    cameraSelect.addEventListener('change', () => localStorage.setItem('cameraId', cameraSelect.value));
 
-    const html5QrCode = new Html5Qrcode('reader');
+    const html5QrCode = new Html5Qrcode('reader', { verbose: false });
     let scanning = false;
     let lastSent = { code: '', at: 0 };
+    let activeTrack = null;
+    let torchOn = false;
 
     function setStatus(text, cls) {
       statusEl.textContent = text;
@@ -192,20 +214,13 @@
 
     async function sendToSheet(code) {
       const url = (endpointInput.value || '').trim();
-      if (!url) {
-        setStatus('Isi dulu URL Apps Script di bawah.', 'err');
-        return;
-      }
+      if (!url) { setStatus('Isi dulu URL Apps Script di bawah.', 'err'); return; }
       setStatus('Mengirim ke spreadsheet…', 'idle');
       try {
         const res = await fetch(url, {
           method: 'POST',
-          // text/plain menghindari CORS preflight ke Apps Script
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            barcode: code,
-            tempat: localStorage.getItem('tempat') || '',
-          }),
+          body: JSON.stringify({ barcode: code, tempat: tempatInput.value.trim() }),
         });
         const data = await res.json();
         if (!data.ok) {
@@ -245,30 +260,135 @@
 
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      // debounce: barcode sama dalam 3 detik diabaikan agar tidak double-kirim
-      if (decodedText === lastSent.code && now - lastSent.at < 3000) return;
+      // Debounce: barcode SAMA dalam 2 detik diabaikan (bukan semua barcode),
+      // supaya scan barcode berbeda secara berurutan tetap tercatat cepat.
+      if (decodedText === lastSent.code && now - lastSent.at < 2000) return;
       lastSent = { code: decodedText, at: now };
       lastEl.textContent = decodedText;
-      if (navigator.vibrate) navigator.vibrate(80);
+      if (navigator.vibrate) navigator.vibrate(60);
       sendToSheet(decodedText);
     }
 
+    // Isi daftar kamera supaya user bisa pilih lensa yang tepat
+    async function populateCameras() {
+      try {
+        // Minta izin kamera dulu agar label device terbaca (iOS/Safari)
+        const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+        tmp.getTracks().forEach(t => t.stop());
+      } catch (e) { /* lanjut, user bisa izinkan nanti */ }
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        const saved = localStorage.getItem('cameraId') || '';
+        cameraSelect.innerHTML = '<option value="">(deteksi otomatis — kamera belakang)</option>';
+        devices.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = d.label || ('Camera ' + d.id.slice(0, 6));
+          if (d.id === saved) opt.selected = true;
+          cameraSelect.appendChild(opt);
+        });
+      } catch (e) {
+        console.warn('getCameras failed', e);
+      }
+    }
+
+    // Terapkan constraint kamera ekstra (focus, exposure) setelah stream aktif
+    async function applyAdvancedConstraints() {
+      try {
+        // html5-qrcode menyimpan video element di dalam #reader
+        const video = document.querySelector('#reader video');
+        if (!video || !video.srcObject) return;
+        activeTrack = video.srcObject.getVideoTracks()[0];
+        if (!activeTrack) return;
+        const caps = activeTrack.getCapabilities ? activeTrack.getCapabilities() : {};
+        const advanced = [];
+        if (caps.focusMode && caps.focusMode.indexOf('continuous') >= 0) {
+          advanced.push({ focusMode: 'continuous' });
+        }
+        if (caps.exposureMode && caps.exposureMode.indexOf('continuous') >= 0) {
+          advanced.push({ exposureMode: 'continuous' });
+        }
+        if (caps.whiteBalanceMode && caps.whiteBalanceMode.indexOf('continuous') >= 0) {
+          advanced.push({ whiteBalanceMode: 'continuous' });
+        }
+        if (advanced.length) {
+          await activeTrack.applyConstraints({ advanced });
+        }
+        // Torch
+        if (caps.torch) {
+          torchBtn.style.display = 'flex';
+        } else {
+          torchBtn.style.display = 'none';
+        }
+        // Zoom
+        if (caps.zoom) {
+          zoomRange.min = caps.zoom.min;
+          zoomRange.max = caps.zoom.max;
+          zoomRange.step = caps.zoom.step || 0.1;
+          zoomRange.value = activeTrack.getSettings().zoom || caps.zoom.min;
+          zoomWrap.classList.add('on');
+        } else {
+          zoomWrap.classList.remove('on');
+        }
+      } catch (e) {
+        console.warn('applyAdvancedConstraints', e);
+      }
+    }
+
+    torchBtn.addEventListener('click', async () => {
+      if (!activeTrack) return;
+      try {
+        torchOn = !torchOn;
+        await activeTrack.applyConstraints({ advanced: [{ torch: torchOn }] });
+        torchBtn.classList.toggle('active', torchOn);
+      } catch (e) {
+        setStatus('Senter tidak didukung di kamera ini', 'warn');
+      }
+    });
+
+    zoomRange.addEventListener('input', async () => {
+      if (!activeTrack) return;
+      try {
+        await activeTrack.applyConstraints({ advanced: [{ zoom: parseFloat(zoomRange.value) }] });
+      } catch (e) { /* ignore */ }
+    });
+
     async function startScan() {
       try {
-        await html5QrCode.start(
-          { facingMode: 'environment' },
-          {
-            fps: 10,
-            qrbox: { width: 260, height: 180 },
-            aspectRatio: 1.0,
+        // qrbox responsif: ~70% sisi terpendek — tidak terlalu kecil
+        const qrbox = (w, h) => {
+          const side = Math.floor(Math.min(w, h) * 0.75);
+          return { width: side, height: side };
+        };
+
+        const config = {
+          fps: 20,
+          qrbox: qrbox,
+          aspectRatio: 1.0,
+          disableFlip: false,
+          // Minta resolusi lebih tinggi supaya barcode tipis tetap jelas
+          videoConstraints: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 },
           },
-          onScanSuccess,
-          () => { /* ignore per-frame fail */ }
-        );
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        };
+
+        const chosenId = cameraSelect.value;
+        const cameraArg = chosenId
+          ? { deviceId: { exact: chosenId } }
+          : { facingMode: { ideal: 'environment' } };
+
+        await html5QrCode.start(cameraArg, config, onScanSuccess, () => {});
         scanning = true;
         startBtn.style.display = 'none';
         stopBtn.style.display = 'block';
         setStatus('Siap. Arahkan ke barcode…', 'idle');
+
+        // Terapkan continuous autofocus setelah stream aktif
+        setTimeout(applyAdvancedConstraints, 400);
       } catch (err) {
         setStatus('Tidak bisa akses kamera: ' + err, 'err');
       }
@@ -276,8 +396,13 @@
 
     async function stopScan() {
       if (!scanning) return;
-      await html5QrCode.stop();
+      try { await html5QrCode.stop(); } catch (e) {}
       scanning = false;
+      activeTrack = null;
+      torchOn = false;
+      torchBtn.classList.remove('active');
+      torchBtn.style.display = 'none';
+      zoomWrap.classList.remove('on');
       startBtn.style.display = 'block';
       stopBtn.style.display = 'none';
       setStatus('Scanner berhenti.', 'idle');
@@ -285,6 +410,9 @@
 
     startBtn.addEventListener('click', startScan);
     stopBtn.addEventListener('click', stopScan);
+
+    // Load daftar kamera saat halaman siap
+    populateCameras();
   </script>
 </body>
 </html>
