@@ -212,17 +212,41 @@
       logEl.prepend(row);
     }
 
+    async function postWithRetry(url, body, attempts) {
+      let lastErr = null;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const ctrl = new AbortController();
+          const timeout = setTimeout(() => ctrl.abort(), 15000);
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(body),
+            signal: ctrl.signal,
+          });
+          clearTimeout(timeout);
+          return await res.json();
+        } catch (err) {
+          lastErr = err;
+          if (i < attempts - 1) {
+            setStatus('Jaringan lambat, mencoba ulang (' + (i + 2) + '/' + attempts + ')…', 'warn');
+            await new Promise(r => setTimeout(r, 800 * (i + 1)));
+          }
+        }
+      }
+      throw lastErr;
+    }
+
     async function sendToSheet(code) {
       const url = (endpointInput.value || '').trim();
       if (!url) { setStatus('Isi dulu URL Apps Script di bawah.', 'err'); return; }
       setStatus('Mengirim ke spreadsheet…', 'idle');
       try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ barcode: code, tempat: tempatInput.value.trim() }),
-        });
-        const data = await res.json();
+        const data = await postWithRetry(
+          url,
+          { barcode: code, tempat: tempatInput.value.trim() },
+          3
+        );
         if (!data.ok) {
           setStatus('Gagal: ' + (data.error || 'unknown'), 'err');
           addLog(code, 'GAGAL — ' + (data.error || ''));
