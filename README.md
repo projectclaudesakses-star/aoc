@@ -14,7 +14,7 @@ mengirim hasil scan langsung ke Google Sheets.
                                        |
                                        | appendRow
                                        v
-                               [Google Sheets — EL1]
+                               [Google Sheets — HP]
                                        |
                                        v
                                    [Dashboard]
@@ -22,9 +22,9 @@ mengirim hasil scan langsung ke Google Sheets.
 
 ## Yang perlu disiapkan
 
-1. **Google Sheet** — sudah ada (`1S3nAnX5ije6prGTwnJ7sZsdYmQtu7q8g`, tab `EL1`).
-   Script akan membuat header otomatis bila baris pertama kosong:
-   `Timestamp | Barcode ID | Tanggal | Jam | Device`.
+1. **Google Sheet** — sudah ada (`1S3nAnX5ije6prGTwnJ7sZsdYmQtu7q8g`, tab `HP`).
+   Script mengisi kolom: `TIMESTAMP | DATE | TIME | SCANNED DETAILS | AGENDA | TEMPAT CHECKIN`
+   (kolom AGENDA dibiarkan kosong).
 2. **Akun Google** untuk deploy Apps Script (akun yang sama dengan pemilik sheet).
 3. **Hosting halaman scanner** — bisa:
    - GitHub Pages (gratis, otomatis HTTPS — wajib karena kamera butuh HTTPS)
@@ -61,13 +61,19 @@ Paling mudah pakai GitHub Pages:
    - "Sudah tercatat hari ini" (kuning) → anti-dobel per hari per barcode
 5. Tambahkan ke home screen (Chrome: **Install app** / Safari: **Add to Home Screen**) agar jadi seperti aplikasi.
 
-## Kolom yang ditulis ke sheet EL1
+## Kolom yang ditulis ke sheet HP
 
-| Timestamp | Barcode ID | Tanggal | Jam | Device |
-|-----------|------------|---------|-----|--------|
+| A: TIMESTAMP | B: DATE | C: TIME | D: SCANNED DETAILS | E: AGENDA | F: TEMPAT CHECKIN |
+|---|---|---|---|---|---|
 
-- Zona waktu mengikuti setting spreadsheet (atur ke Asia/Jakarta di File → Settings bila belum).
-- Baris anti-duplikat per hari — barcode yang sama di tanggal yang sama tidak ditulis ulang.
+- Zona waktu dipaksa ke `Asia/Jakarta` (WIB / GMT+7) di script — tidak tergantung setting spreadsheet.
+- Kolom E (AGENDA) sengaja tidak diisi.
+- Aturan batas scan per unique code per hari:
+  - Default: maksimal **2× per hari**
+  - 19 November 2026: maksimal **3× per hari**
+  - 20 November 2026: maksimal **6× per hari**
+
+  Diatur di `DAILY_LIMIT_OVERRIDES` dalam `Code.gs`.
 
 ## Catatan
 

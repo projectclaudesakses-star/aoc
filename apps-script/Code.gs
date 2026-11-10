@@ -1,6 +1,6 @@
 /**
  * Backend Google Apps Script untuk menerima data scan barcode dari HP
- * dan menyimpannya ke Google Sheets (sheet EL1).
+ * dan menyimpannya ke Google Sheets (sheet HP).
  *
  * CARA DEPLOY:
  * 1. Buka https://script.google.com -> New Project
